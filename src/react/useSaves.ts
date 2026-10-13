@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { PhError, isPhError } from '../core/errors.js'
 import type { SavesClient, UpsertInput } from '../core/saves.js'
 import type { SaveSummaryRow } from '../core/types.js'
@@ -16,8 +16,14 @@ export function useSaves(kind: string) {
   const [error, setError] = useState<PhError | null>(null)
   const [nonce, setNonce] = useState(0)
 
+  const prev = useRef({ kind, signedIn })
+
   useEffect(() => {
-    setItems([]) // never show another kind's (or another session's) rows
+    // Never show another kind's (or another session's) rows; a plain refresh keeps the list to avoid an empty flash.
+    if (prev.current.kind !== kind || prev.current.signedIn !== signedIn) {
+      setItems([])
+      prev.current = { kind, signedIn }
+    }
     setError(null)
     if (!signedIn) {
       setLoading(false)

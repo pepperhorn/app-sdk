@@ -128,4 +128,19 @@ describe('useSaves loading and kind switches', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.items).toEqual([])
   })
+
+  it('keeps the list while refetching after save and remove (no empty flash)', async () => {
+    const { client, wrapper, gw } = setup()
+    await signIn(client)
+    gw.seedSave('ana@example.test', { kind: 'scene', externalId: 'e1', name: 'One', payload: {} })
+    const seen: number[] = []
+    const { result } = renderHook(() => { const s = useSaves('scene'); seen.push(s.items.length); return s }, { wrapper })
+    await waitFor(() => expect(result.current.items).toHaveLength(1))
+    seen.length = 0
+    await act(async () => { await result.current.save({ kind: 'scene', externalId: 'e2', name: 'Two', payload: {} }) })
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    await act(async () => { await result.current.remove('e2') })
+    await waitFor(() => expect(result.current.items).toHaveLength(1))
+    expect(seen).not.toContain(0)
+  })
 })
