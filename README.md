@@ -14,7 +14,7 @@ await ph.saves.upsert({ kind: 'preset', externalId: crypto.randomUUID(), name: '
 
 - `@pepperhorn/app-sdk/react`: `PhProvider`, `useAuth`, `useSaves`, `useShareFromUrl`.
 - `@pepperhorn/app-sdk/ui`: headless `useOtpForm` and `OtpDigits` (class hooks `.ph-otp-form`, `.ph-otp-digit`).
-- `@pepperhorn/app-sdk/testing`: an in-memory fake of the PepperHorn endpoints for tests.
+- `@pepperhorn/app-sdk/testing`: `createFakeGateway`, an in-memory fake of the PepperHorn endpoints for tests.
 
 Peer dependencies: `zod >=3.25 <5` (imported as `zod/v4`), and `react >=19` for the React entries only.
 
