@@ -37,7 +37,10 @@
     "build": "rm -rf dist && tsup && tsc -p tsconfig.build.json && node scripts/check-dist.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "check:pack": "npm run build && node scripts/check-pack.mjs",
+    "smoke:auth": "tsx scripts/smoke-auth.ts",
+    "smoke:saves": "tsx scripts/smoke-saves.ts"
   },
   "peerDependencies": {
     "react": ">=19",
