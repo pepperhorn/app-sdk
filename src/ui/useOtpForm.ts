@@ -38,7 +38,7 @@ export function useOtpForm(o: OtpFormOptions): OtpFormState {
   useEffect(() => { onDone.current = o.onDone })
 
   const cooldownMs = (o.cooldownSec ?? 60) * 1000
-  const resendInSec = pending ? Math.max(0, Math.ceil((pending.codeSentAt + cooldownMs - nowMs) / 1000)) : 0
+  const resendInSec = pending ? Math.min(o.cooldownSec ?? 60, Math.max(0, Math.ceil((pending.codeSentAt + cooldownMs - nowMs) / 1000))) : 0
   const cooling = resendInSec > 0
   useEffect(() => {
     if (!cooling) return
@@ -68,16 +68,16 @@ export function useOtpForm(o: OtpFormOptions): OtpFormState {
   const verify = useCallback((code: string) => {
     if (submitting.current) return Promise.resolve()
     submitting.current = true
+    let user: AuthUser | null = null
     return run(async () => {
       try {
-        const user = await auth.verifyCode(email, code)
+        user = await auth.verifyCode(email, code)
         setStep('done')
-        onDone.current(user)
       } catch (e) {
         setDigits(blank(o.codeLength))
         throw e
       }
-    }).finally(() => { submitting.current = false })
+    }).finally(() => { submitting.current = false }).then(() => { if (user) onDone.current(user) })
   }, [auth, email, o.codeLength, run])
 
   const setDigit = useCallback((index: number, value: string) => {
@@ -92,15 +92,16 @@ export function useOtpForm(o: OtpFormOptions): OtpFormState {
 
   const full = digits.every((d) => d !== '')
   useEffect(() => {
-    if (step === 'code' && full) void verify(digits.join(''))
+    if (step === 'code' && full) verify(digits.join('')).catch((e: unknown) => { console.error('onDone threw', e) }) // onDone's own failure is not a sign-in error
     // Fires on the transition to "every digit filled"; a failed verify clears them.
   }, [full, step])
 
   const resend = useCallback(() => run(async () => {
     if (resendInSec > 0) return
     await auth.requestCode(email)
+    setDigits(blank(o.codeLength))
     setNowMs(Date.now())
-  }), [auth, email, resendInSec, run])
+  }), [o.codeLength, auth, email, resendInSec, run])
 
   const back = useCallback(() => {
     setStep('email')

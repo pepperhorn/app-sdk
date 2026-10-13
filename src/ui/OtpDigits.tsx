@@ -22,19 +22,26 @@ export function OtpDigits(p: { form: OtpFormState; className?: string; inputClas
           aria-label={`Digit ${i + 1} of ${n}`}
           autoFocus={p.autoFocus === true && i === 0}
           value={d}
-          disabled={form.busy}
+          readOnly={form.busy}
           onChange={(e) => {
             const v = e.target.value.replace(/\D/g, '')
+            if (v.length >= n) { form.setDigit(0, v); focus(n - 1); return }
             form.setDigit(i, d && v.length === 2 ? v.slice(-1) : v)
             if (v) focus(i + Math.max(1, v.length === 2 && d ? 1 : v.length))
           }}
           onPaste={(e) => {
             e.preventDefault()
             const t = e.clipboardData.getData('text')
+            const len = t.replace(/\D/g, '').length
+            if (len >= n) { form.setDigit(0, t); focus(n - 1); return }
             form.setDigit(i, t)
-            focus(i + t.replace(/\D/g, '').length)
+            focus(i + len)
           }}
-          onKeyDown={(e) => { if (e.key === 'Backspace' && !d && i > 0) focus(i - 1) }}
+          onKeyDown={(e) => {
+            if (e.key === 'Backspace' && !d && i > 0) focus(i - 1)
+            else if (e.key === 'ArrowLeft') { e.preventDefault(); focus(i - 1) }
+            else if (e.key === 'ArrowRight') { e.preventDefault(); focus(i + 1) }
+          }}
         />
       ))}
     </div>
