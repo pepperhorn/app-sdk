@@ -23,6 +23,8 @@ export interface FakeGatewayOptions {
   kinds?: Record<string, FakeKind>
   shortLinks?: boolean
   now?: () => number
+  /** Rethrow unexpected (non-gateway) exceptions instead of answering 500. Default false. */
+  debug?: boolean
 }
 export interface FakeUser { id: string; email: string; handle: string; firstName: string | null; lastName: string | null }
 export interface FakeSave {
@@ -199,7 +201,8 @@ export function createFakeGateway(o: FakeGatewayOptions = {}): FakeGateway {
 
   async function handle(method: string, url: URL, headers: Headers, b: Record<string, unknown>): Promise<Response> {
     const p = url.pathname
-    const slug = url.searchParams.get('appSlug') ?? b.appSlug
+    // Production reads appSlug from the query for GET/DELETE and from the body for POST/PATCH.
+    const slug = method === 'GET' || method === 'DELETE' ? url.searchParams.get('appSlug') ?? undefined : b.appSlug
 
     // ---- directus-otp-auth (bearer transport) ----
     if (method === 'POST' && p === '/otp-auth/code') {
@@ -482,6 +485,8 @@ export function createFakeGateway(o: FakeGatewayOptions = {}): FakeGateway {
       return await handle(method, url, headers, body)
     } catch (e) {
       if (e instanceof Fail) return e.res
+      console.error('fake gateway: unexpected error', e)
+      if (o.debug) throw e
       return fail(500, 'server')
     }
   }) as typeof fetch

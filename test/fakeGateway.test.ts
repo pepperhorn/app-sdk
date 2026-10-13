@@ -1,7 +1,7 @@
 // Wire-level checks that the fake answers like the real gateway
 // (ph-apps-extensions endpoints/ph/src/routes/*, directus-otp-auth routes.js),
 // so tests built on it predict production.
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createFakeGateway } from '../src/testing/index.js'
 
 const APP = 'test-app'
@@ -170,5 +170,36 @@ describe('fake gateway wire fidelity', () => {
     const u = gw.users.get('a@x.test')!
     expect(gw.saves.get(`${u.id}|scene|e`)).toBe(s)
     expect(u.handle).toMatch(/^player-\d+$/)
+  })
+
+  it('reads appSlug by method like production: query for GET/DELETE, body for POST/PATCH', async () => {
+    const { call, signIn } = client()
+    await signIn('a@x.test')
+    // wrong place -> the gateway sees no app
+    expect((await call('GET', '/ph/v1/me')).body).toEqual({ ok: false, error: 'invalid', detail: 'unknown_app' })
+    expect((await call('PATCH', `/ph/v1/me?appSlug=${APP}`, {})).body).toEqual({ ok: false, error: 'invalid', detail: 'unknown_app' })
+    expect((await call('POST', `/ph/v1/saves?appSlug=${APP}`, { kind: 'scene' })).body).toEqual({ ok: false, error: 'invalid', detail: 'unknown_app' })
+    expect((await call('DELETE', '/ph/v1/shares/AbCdEfGhJk', { appSlug: APP })).body).toEqual({ ok: false, error: 'invalid', detail: 'unknown_app' })
+    // right place
+    expect((await call('GET', `/ph/v1/me?appSlug=${APP}`)).status).toBe(200)
+    expect((await call('PATCH', '/ph/v1/me', { appSlug: APP })).status).toBe(200)
+  })
+
+  it('non-Fail exceptions: logged and 500 by default; rethrown with debug', async () => {
+    const boom = { maxBytes: 1024, validate: () => { throw new Error('kaboom') } }
+    const body = { appSlug: APP, kind: 'scene', externalId: 'e', name: 'n', payload: {} }
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      const a = client(createFakeGateway({ appSlug: APP, kinds: { scene: boom }, fixedCode: '12345678' }))
+      await a.signIn('a@x.test')
+      const r = await a.call('POST', '/ph/v1/saves', body)
+      expect(r).toMatchObject({ status: 500, body: { ok: false, error: 'server' } })
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('fake gateway'), expect.objectContaining({ message: 'kaboom' }))
+      const d = client(createFakeGateway({ appSlug: APP, kinds: { scene: boom }, fixedCode: '12345678', debug: true }))
+      await d.signIn('a@x.test')
+      await expect(d.call('POST', '/ph/v1/saves', body)).rejects.toThrow('kaboom')
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
