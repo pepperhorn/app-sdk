@@ -147,15 +147,16 @@ export function createAuthStore(d: AuthDeps): AuthStoreInternal {
     async requestCode(email) {
       const e = normalizeEmail(email)
       if (e.length > 254 || !EMAIL_RE.test(e)) throw new PhError('invalid', { message: 'Enter a valid email address.' })
-      if (snapshot.status === 'unknown') {
-        // The user is entering a code: a late restore must not flip to signed-in mid-entry.
-        epoch++
-        stopRetry()
-      }
       await d.http({ method: 'POST', path: '/ph/v1/enroll', body: { email: e, appSlug: d.appSlug }, auth: 'none' }, OkSchema)
       await d.http({ method: 'POST', path: '/otp-auth/code', body: { email: e, appSlug: d.appSlug }, auth: 'none' }, OkSchema)
       const pending = { email: e, codeSentAt: d.now() }
       d.otp.save(pending)
+      if (snapshot.status === 'unknown') {
+        // The user is entering a code: a late restore must not flip to signed-in mid-entry.
+        // Only after both POSTs succeed, so a failure leaves the retry timer alive.
+        epoch++
+        stopRetry()
+      }
       if (snapshot.status !== 'signed-in') set({ status: 'signed-out', pending })
     },
 

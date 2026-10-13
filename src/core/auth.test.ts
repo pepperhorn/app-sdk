@@ -143,6 +143,20 @@ describe('restore', () => {
     expect(c.auth.getSnapshot()).toEqual({ status: 'signed-out', pending: { email: 'ana@example.test', codeSentAt: SENT } })
   })
 
+  it('a failed requestCode while unknown leaves the restore retry alive', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const { c, stub } = client({
+      'GET /otp-auth/session': [() => json(503, { ok: false }), session],
+      'GET /ph/v1/me': me, 'POST /ph/v1/enroll': () => json(503, { ok: false }),
+    }, { token: true })
+    await c.auth.restore()
+    expect(c.auth.getSnapshot().status).toBe('unknown')
+    await expect(c.auth.requestCode('ana@example.test')).rejects.toBeDefined()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(stub.calls.filter((x) => x.path === '/otp-auth/session')).toHaveLength(2)
+    expect(c.auth.getSnapshot().status).toBe('signed-in')
+  })
+
   it('requestCode while unknown cancels a late restore so it cannot sign in mid-code-entry', async () => {
     let release!: () => void
     const gate = new Promise<void>((r) => { release = r })

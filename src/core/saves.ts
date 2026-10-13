@@ -51,7 +51,7 @@ export function createSavesClient(d: { appSlug: string; http: Http }): SavesClie
       }
     },
     async upsert<T>(i: UpsertInput<T>) {
-      const r = await d.http({ method: 'POST', path: '/ph/v1/saves', body: { appSlug, ...i }, auth: 'required' }, RowWire)
+      const r = await d.http({ method: 'POST', path: '/ph/v1/saves', body: { appSlug, kind: i.kind, externalId: i.externalId, name: i.name, payload: i.payload, visibility: i.visibility, ifUpdatedAt: i.ifUpdatedAt }, auth: 'required' }, RowWire)
       return r.save as SaveRow<T>
     },
     async setVisibility(kind, externalId, v) {

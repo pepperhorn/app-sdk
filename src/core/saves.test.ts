@@ -50,6 +50,12 @@ describe('SavesClient', () => {
     await expect(c.saves.upsert({ kind: 'scene', externalId: 'e2', name: 'Two', payload: {} })).rejects.toMatchObject({ code: 'conflict', detail: 'quota' })
   })
 
+  it('upsert sends only the known fields', async () => {
+    const { c, stub } = client({ 'POST /ph/v1/saves': () => json(200, { ok: true, save: row() }) })
+    await c.saves.upsert({ kind: 'scene', externalId: 'e1', name: 'One', payload: {}, id: 'x', createdAt: T0 } as never)
+    expect(Object.keys(stub.calls[0]!.body as object).sort()).toEqual(['appSlug', 'externalId', 'kind', 'name', 'payload'])
+  })
+
   it('setVisibility, remove and listPublic hit the right routes; listPublic sends no token', async () => {
     const { c, stub } = client({
       'PATCH /ph/v1/saves/scene/e1': () => json(200, { ok: true, save: row({ visibility: 'public' }) }),
