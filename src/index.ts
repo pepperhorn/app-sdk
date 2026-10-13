@@ -12,3 +12,6 @@ export { localStorageOtpFlow, memoryOtpFlow, OTP_FLOW_TTL_MS } from './core/otp-
 export type { OtpFlowStore } from './core/otp-flow.js'
 export { RESTORE_BACKOFF_MS } from './core/auth.js'
 export type { AuthStore } from './core/auth.js'
+export type { SavesClient, UpsertInput } from './core/saves.js'
+export { parseShareCode, SHARE_CODE_RE, DEFAULT_SHARE_PATH_RE } from './core/shares.js'
+export type { SharesClient } from './core/shares.js'

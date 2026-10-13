@@ -123,6 +123,40 @@ describe('restore', () => {
     expect(stub.calls.filter((x) => x.path === '/otp-auth/session')).toHaveLength(1)
   })
 
+  it.each([400, 403])('a %i restore clears the token so optional-auth calls go out without it', async (status) => {
+    const { c, stub, tokens } = client({
+      'GET /otp-auth/session': () => json(status, { ok: false }),
+      'POST /ph/v1/shares': () => ok({ code: 'AbCdEfGhJk', url: 'u', shortUrl: null }),
+    }, { token: true })
+    await c.auth.restore()
+    expect(c.auth.getSnapshot().status).toBe('signed-out')
+    expect(tokens.get()).toBeNull()
+    await c.shares.createAnonymous({ kind: 'look', payload: {} })
+    expect(stub.calls.find((x) => x.path === '/ph/v1/shares')!.auth).toBeNull()
+  })
+
+  it('a 401 on an authenticated call keeps the pending OTP step', async () => {
+    const { c, otp } = client({ 'GET /otp-auth/sessions': () => json(401, { ok: false }) }, { token: true })
+    const SENT = Date.now()
+    otp.save({ email: 'ana@example.test', codeSentAt: SENT })
+    await expect(c.auth.devices()).rejects.toMatchObject({ code: 'unauthorized' })
+    expect(c.auth.getSnapshot()).toEqual({ status: 'signed-out', pending: { email: 'ana@example.test', codeSentAt: SENT } })
+  })
+
+  it('requestCode while unknown cancels a late restore so it cannot sign in mid-code-entry', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    const { c } = client({
+      'GET /otp-auth/session': async () => { await gate; return session() },
+      'GET /ph/v1/me': me, 'POST /ph/v1/enroll': ok, 'POST /otp-auth/code': ok,
+    }, { token: true })
+    const restoring = c.auth.restore()
+    await c.auth.requestCode('ana@example.test')
+    release()
+    await restoring
+    expect(c.auth.getSnapshot()).toMatchObject({ status: 'signed-out', pending: { email: 'ana@example.test' } })
+  })
+
   it('parses the /me envelope, not a bare user', async () => {
     const { c } = client({ 'GET /otp-auth/session': session, 'GET /ph/v1/me': () => ok(USER) }, { token: true })
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })

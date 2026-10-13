@@ -118,9 +118,11 @@ export function createAuthStore(d: AuthDeps): AuthStoreInternal {
             set(signedOut())
           } else if (isPhError(e) && e.status !== undefined && e.status >= 400 && e.status < 500 && e.code !== 'rate_limited') {
             // A 400 (unknown app slug) or 403 (origin refused) will not fix
-            // itself: stop retrying and show signed-out. The token is kept
-            // (only a 401 clears it); a later explicit restore() may retry.
+            // itself: stop retrying, drop the token and show signed-out, so the
+            // stored token never rides along on optional-auth calls while the
+            // UI says signed-out.
             stopRetry()
+            d.tokens.clear()
             set(signedOut())
           } else {
             // Offline, 5xx or 429: the session may be fine. Keep the token, stay
@@ -145,6 +147,11 @@ export function createAuthStore(d: AuthDeps): AuthStoreInternal {
     async requestCode(email) {
       const e = normalizeEmail(email)
       if (e.length > 254 || !EMAIL_RE.test(e)) throw new PhError('invalid', { message: 'Enter a valid email address.' })
+      if (snapshot.status === 'unknown') {
+        // The user is entering a code: a late restore must not flip to signed-in mid-entry.
+        epoch++
+        stopRetry()
+      }
       await d.http({ method: 'POST', path: '/ph/v1/enroll', body: { email: e, appSlug: d.appSlug }, auth: 'none' }, OkSchema)
       await d.http({ method: 'POST', path: '/otp-auth/code', body: { email: e, appSlug: d.appSlug }, auth: 'none' }, OkSchema)
       const pending = { email: e, codeSentAt: d.now() }
@@ -248,7 +255,7 @@ export function createAuthStore(d: AuthDeps): AuthStoreInternal {
     handleUnauthorized() {
       epoch++
       stopRetry()
-      set({ status: 'signed-out', pending: null })
+      set(signedOut())
     },
   }
   return store

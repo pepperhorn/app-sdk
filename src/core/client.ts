@@ -1,6 +1,8 @@
 import { createHttp } from './http.js'
 import { localStorageTokenStore, type TokenStore } from './token-store.js'
 import { localStorageOtpFlow, type OtpFlowStore } from './otp-flow.js'
+import { createSavesClient, type SavesClient } from './saves.js'
+import { createSharesClient, type SharesClient } from './shares.js'
 import { createAuthStore, type AuthStore, type AuthStoreInternal } from './auth.js'
 
 export const DEFAULT_BASE_URL = 'https://apps.pepperhorn.com'
@@ -24,6 +26,8 @@ export interface PhClient {
   readonly appSlug: string
   readonly baseUrl: string
   auth: AuthStore
+  saves: SavesClient
+  shares: SharesClient
 }
 
 export function createPepperhornClient(o: PhClientOptions): PhClient {
@@ -40,5 +44,9 @@ export function createPepperhornClient(o: PhClientOptions): PhClient {
     appSlug: o.appSlug, baseUrl, http, fetch: fetchImpl, tokens, otp, now,
     appVersion: o.appVersion, deviceLabel: o.deviceLabel,
   })
-  return { appSlug: o.appSlug, baseUrl, auth }
+  return {
+    appSlug: o.appSlug, baseUrl, auth,
+    saves: createSavesClient({ appSlug: o.appSlug, http }),
+    shares: createSharesClient({ appSlug: o.appSlug, http }),
+  }
 }
