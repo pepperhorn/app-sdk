@@ -8,7 +8,13 @@ import { useAuth } from './useAuth.js'
 
 export type ShareFromUrlState = 'none' | 'loading' | 'ready' | 'missing' | 'error'
 
-/** Resolves `/s/<code>` (or `pattern`) once auth has settled, so isOwner/canEdit are right first time. */
+const NONE = { state: 'none' as ShareFromUrlState, share: null, error: null }
+const LOADING = { state: 'loading' as ShareFromUrlState, share: null, error: null }
+
+/**
+ * Resolves `/s/<code>` (or `pattern`) once auth has settled, so isOwner/canEdit are right first time.
+ * `pathname` defaults to `location.pathname` read at render: the caller must re-render on navigation.
+ */
 export function useShareFromUrl<T = unknown>(o: { pattern?: RegExp; schema?: z.ZodType<T>; pathname?: string } = {}) {
   const client = usePh()
   const { status } = useAuth()
@@ -34,5 +40,7 @@ export function useShareFromUrl<T = unknown>(o: { pattern?: RegExp; schema?: z.Z
     return () => { alive = false }
   }, [client, code, status])
 
+  if (!code) return NONE
+  if (status === 'unknown') return LOADING
   return s
 }

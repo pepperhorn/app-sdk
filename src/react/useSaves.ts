@@ -17,13 +17,14 @@ export function useSaves(kind: string) {
   const [nonce, setNonce] = useState(0)
 
   useEffect(() => {
+    setItems([]) // never show another kind's (or another session's) rows
+    setError(null)
     if (!signedIn) {
-      setItems([])
+      setLoading(false)
       return
     }
     let alive = true
     setLoading(true)
-    setError(null)
     void (async () => {
       const all: SaveSummaryRow[] = []
       let cursor: string | undefined

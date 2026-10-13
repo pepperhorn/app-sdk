@@ -73,6 +73,8 @@ describe('useShareFromUrl', () => {
     calls.length = 0
     const { result } = renderHook(() => useShareFromUrl({ pathname: `/s/${code}` }), { wrapper: w })
     expect(result.current.state).toBe('loading')
+    await new Promise((r) => setTimeout(r, 50)) // a stable window in which a premature request would land
+    expect(result.current.state).toBe('loading')
     expect(calls.some((c) => c.includes('/ph/v1/shares/'))).toBe(false)
     await act(() => restoring.auth.restore().then(() => undefined))
     await waitFor(() => expect(result.current.state).toBe('ready'))
@@ -84,5 +86,46 @@ describe('useShareFromUrl', () => {
     expect(renderHook(() => useShareFromUrl({ pathname: '/' }), { wrapper }).result.current.state).toBe('none')
     const { result } = renderHook(() => useShareFromUrl({ pathname: '/s/AbCdEfGhJk' }), { wrapper })
     await waitFor(() => expect(result.current.state).toBe('missing'))
+  })
+})
+
+describe('useSaves loading and kind switches', () => {
+  /** Holds GET /ph/v1/saves until released. */
+  function gated() {
+    const s = setup()
+    let release: () => void = () => undefined
+    const hold = new Promise<void>((r) => { release = r })
+    let armed = false
+    const inner = s.gw.fetch
+    s.gw.fetch = (async (i: RequestInfo | URL, n?: RequestInit) => {
+      if (armed && new URL(String(i)).pathname === '/ph/v1/saves' && (n?.method ?? 'GET') === 'GET') await hold
+      return inner(i, n)
+    }) as typeof fetch
+    return { ...s, release, arm: () => { armed = true } }
+  }
+
+  it('loading falls back to false when sign-out interrupts an in-flight list', async () => {
+    const { client, wrapper, arm, release } = gated()
+    await signIn(client)
+    arm()
+    const { result } = renderHook(() => useSaves('scene'), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(true))
+    await act(() => client.auth.signOut().then(() => undefined))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    await act(async () => { release() })
+    expect(result.current.loading).toBe(false)
+    expect(result.current.items).toEqual([])
+  })
+
+  it('clears the previous kind\'s items when the kind changes', async () => {
+    const { client, wrapper, gw } = setup()
+    await signIn(client)
+    gw.seedSave('ana@example.test', { kind: 'scene', externalId: 'e1', name: 'One', payload: {} })
+    const { result, rerender } = renderHook(({ k }) => useSaves(k), { wrapper, initialProps: { k: 'scene' } })
+    await waitFor(() => expect(result.current.items).toHaveLength(1))
+    rerender({ k: 'look' })
+    expect(result.current.items).toEqual([]) // cleared at once, not after the next fetch lands
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.items).toEqual([])
   })
 })
